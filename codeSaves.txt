@@ -1,0 +1,23 @@
+//Old KeyPRess Server Code
+
+if(data.key == 87 || data.key == 38){// W or Up_Arrow
+          Rooms[Rind].players[Pind].y -= playerSpeed;
+          if(collidesWorld(Rind,Rooms[Rind].players[Pind]) == 1){
+              Rooms[Rind].players[Pind].y += playerSpeed;
+          }
+      }else if(data.key == 83 || data.key == 40){// S or Down_Arrow
+          Rooms[Rind].players[Pind].y += playerSpeed;
+          if(collidesWorld(Rind,Rooms[Rind].players[Pind],"nextD") == 1){
+              Rooms[Rind].players[Pind].y -= playerSpeed;
+          }
+      }else if(data.key == 65 || data.key == 37){// A or Left_Arrow
+          Rooms[Rind].players[Pind].x -= playerSpeed;
+          if(collidesWorld(Rind,Rooms[Rind].players[Pind]) == 1){
+              Rooms[Rind].players[Pind].x += playerSpeed;
+          }
+      }else if(data.key == 68 || data.key == 39){// D or Right_Arrow
+          Rooms[Rind].players[Pind].x += playerSpeed;
+          if(collidesWorld(Rind,Rooms[Rind].players[Pind],"nextR") == 1){
+              Rooms[Rind].players[Pind].x -= playerSpeed;
+          }
+      }

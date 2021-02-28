@@ -1,0 +1,113 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  background-color: #ffffff;
+ 
+  
+}
+canvas {
+  display: block;
+  border-style: solid;
+  border-width: 5px;
+}
+
+.gone{
+  visibility:hidden;
+  user-select: none;
+}
+
+
+button.diconnectButton{
+  color: black;
+  font-size: 16px;
+  padding: 16px 30px;
+  border: none;
+  cursor: pointer;
+  border-radius: 5px;
+  text-align: center;
+  background-color:  rgb(199, 72, 50);
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  visibility:hidden;
+}
+
+canvas {
+  display: block;
+  border-style: solid;
+  border-width: 5px;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  /* bring your own prefixes */
+  transform: translate(-50%, -50%);
+}
+
+.Title{
+  overflow: hidden;
+  background-color: #f1f1f1;
+  padding: 20px 10px;
+  text-align: center;
+}
+
+
+
+
+.Levels{
+  padding: 25px;
+}
+.Levels > button:not(:last-child) {
+            margin-right: 25px;
+            margin-bottom: 25px;
+}
+
+.levelInstance{
+  box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
+  transition: 0.3s;
+  background-color: #00e0f0;
+  padding:10px;
+}
+
+.start{
+  background-color: #4CAF50; /* Green */
+  border: none;
+  color: white;
+  padding: 16px 32px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  font-size: 16px;
+  margin: 4px 2px;
+  transition-duration: 0.4s;
+  height:100px;
+  width: 400px;
+  position: relative;
+  cursor: pointer;
+  top: 50%;
+  left: 50%;
+  /* bring your own prefixes */
+  transform: translate(-50%, 180%);
+}
+
+.start2{
+  background-color: rgb(158, 18, 128); /* Green */
+  border: none;
+  color: white;
+  padding: 16px 32px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  font-size: 16px;
+  margin: 4px 2px;
+  transition-duration: 0.4s;
+  position: absolute;
+  cursor: pointer;
+  left: 0;
+  top: 0;
+  visibility: hidden;
+}
+
+#create{background-color: rgb(59, 33, 204);}
+#create:hover{ background-color: rgb(84, 78, 119);}
+#createR:hover{ background-color: rgb(122, 190, 65);}
+.start:hover {background-color: #0fee91;}

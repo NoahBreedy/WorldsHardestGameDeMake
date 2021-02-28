@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.1.9/p5.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <link rel="stylesheet" type="text/css" href="/client/style.css">
+    <link rel="shortcut icon" type="image" href="/client/favicon(2).ico"/>
+    <meta charset="utf-8" />
+    <title>Worlds Hardest Race</title>
+
+  </head>
+  <body>
+    <div class ="Title">
+      <h2 id="currentTitleMsg">Welcome Worlds Hardest Game:</h2>
+      </div>
+    <div id="objectContainer" class = "Levels">
+      <!-- Store Levels as butons and when they are hit add that to your levels Array  -->
+    </div>
+    <div id="Game" class="Game">
+      <!-- Canvas -->
+    </div>
+    <div id="UI" class="UI">
+      <button onclick="goToPage(2)" id="join" class="start">Join Game</button><br>
+      <button onclick="goToPage(1)" id="create" class="start">Create Game</button>
+      <button onclick="createRoom()" id="createR" class="start2">Create Room</button>
+      <button onclick="leaveRoom()" id="dcBtn" class="diconnectButton">Leave Game</button>
+    </div>
+    <script src="/client/sketch.js"></script>
+  </body>
+</html>
