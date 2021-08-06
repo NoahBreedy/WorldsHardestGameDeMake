@@ -37,17 +37,17 @@ socket.on('returnLevels',(data)=>{
    rawPlayers = room.players;
    init();
    cnv.show();
-}).on('updateGame',(data)=>{
-   if(player != 1){
-     if(data.balls.length>0){
-          if(data.balls[0].level == myLevel ){
-       balls = [];
-     for(var ball of data.balls){
-        balls.push(new Ball(ball.x,ball.y,ball.i,ball.pos,ball.speed,ball.level));
-      }
-     }
-     } 
-   }
+}).on('updatePlayers',(data)=>{
+  //  if(player != 1){
+  //    if(data.balls.length>0){
+  //         if(data.balls[0].level == myLevel ){
+  //      balls = [];
+  //    for(var ball of data.balls){
+  //       balls.push(new Ball(ball.x,ball.y,ball.i,ball.pos,ball.speed,ball.level));
+  //     }
+  //    }
+  //    } 
+  //  }
    rawPlayers = data.players;
    HOSTLEVEL = rawPlayers[0].level;
    drawLevel();
@@ -118,6 +118,9 @@ function init(ok=null){
   }
   balls = [];
   coins = [];
+  if(player != 1){
+     socket.emit("getRoomBalls", "needData");    
+  }
   for(var ball of data.balls){
     balls.push(new Ball(ball.x,ball.y,ball.i,ball.pos,ball.speed,ball.level));
   }
@@ -126,9 +129,6 @@ function init(ok=null){
     coins.push(new Coin(data.coins[i].x,data.coins[i].y));
   }
   exitCoins = data.coins.length;
-  if(player != 1){
-     socket.emit("getRoomBalls", "needData");    
-  }
   loaded = true;
 }
 
@@ -165,9 +165,7 @@ function drawLevel(){
     image(pg, 0, 0);
     for(var ball of balls){
        ball.show();
-       if(player == 1 || myLevel<HOSTLEVEL || myLevel>HOSTLEVEL){
-         ball.update();
-       }
+       ball.update();
        p1.collidesBall(ball);
     }
     for(var k =0;k<coins.length;k++){

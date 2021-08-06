@@ -1,3 +1,8 @@
+/*
+  TODO: Add Client-Side Prediction with Server-Side Reconcilliation
+  TODO: Add Entity Interpolation
+*/
+
 require('dotenv').config();
 const express = require('express');
 const app = express();
@@ -8,7 +13,7 @@ const io = socket(serv);
 const Max_Rooms = 10,ID_LENGTH=5,res=25,playerSpeed = 1.25,dict="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 let AllLevels,Rooms=[];
 
-
+//A pool connection may not be needed here but whatever I dont care
 const con = mysql.createPool({
     host: process.env.DB_HOST,
     user: process.env.DB_USER,
@@ -20,15 +25,14 @@ const con = mysql.createPool({
 
 
 //sendDataToGameRooms  run at 22/33/70
-setInterval(heartBeat,33);
-function heartBeat(){
+setInterval(updatePlayers,40);
+function updatePlayers(){
   for(var i=0;i<Rooms.length;i++){
     const data = {
       players: Rooms[i].players,
-      balls: Rooms[i].balls,
       playerCount: Rooms[i].playerCount
     }
-    io.to(Rooms[i].id).emit('updateGame',data);
+    io.to(Rooms[i].id).emit('updatePlayers',data);
   }
 }
 //update the list of rooms
