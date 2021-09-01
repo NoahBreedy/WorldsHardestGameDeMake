@@ -1,83 +1,93 @@
 const socket = io();
-const Max_Levels = 5,Max_Players = 5,playerSpeed=1.25;
+const Max_Levels = 5,Max_Players = 5,playerSpeed=1.25,res = 25;;
 let AllLevels,AllRooms,HOSTLEVEL,myQueue=[];
 
-let loaded = false;
+
 let rawPlayers = [];
+let balls = [];
+let bCopy = [];
+let coins = [];
+let pastPlayers = [];
+let keys = [];
+let actions = [];
+let loaded = false;
+let pressing = false;
+let debugMode = false;
+let myLevel = 0;
+let exitCoins =0;
+let player = 0;
+let currPlayerCount = 0;
 let levels;
 let data;
 let grid;
-let myLevel = 0;
-let exitCoins =0;
 let origCoins;
-const res = 25;
-let balls = [];
-let coins = [];
-let players = [];
 let pg;
-let player = 0;
-let pressing = false;
 let myKey;
 let p1;
-let currPlayerCount = 0;
+let cTime;
+
 //Events
-socket.on('returnLevels',(data)=>{
+socket.on('returnLevels',data=>{
      AllLevels = data;
      renderLevels(AllLevels);
-}).on('msg',(msg)=>{
+}).on('returnRooms',data=>{
+  console.log(data);
+  renderRooms(data);
+}).on('altmsg',msg=>{
   alert(msg);
-}).on('joinedRoom',(room)=>{
-   loaded = false;
-   document.getElementById("join").style.display = "none";
-   document.getElementById("create").style.display = "none";
-   document.getElementById("createR").style.display = "none";
-   document.getElementById('objectContainer').style.display = "none";
-   document.getElementById('dcBtn').style.visibility = "visible";
-   levels = room.levels;
-   rawPlayers = room.players;
-   init();
-   cnv.show();
-}).on('updatePlayers',(data)=>{
-  //  if(player != 1){
-  //    if(data.balls.length>0){
-  //         if(data.balls[0].level == myLevel ){
-  //      balls = [];
-  //    for(var ball of data.balls){
-  //       balls.push(new Ball(ball.x,ball.y,ball.i,ball.pos,ball.speed,ball.level));
-  //     }
-  //    }
-  //    } 
-  //  }
-   rawPlayers = data.players;
-   HOSTLEVEL = rawPlayers[0].level;
-   drawLevel();
-   handelKeyBoard();
-   drawPlayers();
-   currPlayerCount = data.playerCount;
-}).on('returnRooms',(data)=>{
-    AllRooms = data;
-    renderRooms(AllRooms)
-}).on('activateInit',(data)=>{
-   init();
-}).on('playerLeftRoom',(data)=>{
-    loaded = false;
-    if(data.whoLeft < player){
-      player -= 1;
-      if(player<1){
-          player = 1;
-      }
-    } 
-    currPlayerCount = data.playerCount;
+}).on('msg',msg=>{
+  console.log(msg);
+}).on('returnStartData',data=>{
+    player = data.me.num;
+    myLevel = data.me.level;
+    levels = data.levels;
+    document.getElementById('UI').style.display  = "none";
+    document.getElementById('objectContainer').style.display  = "none";
+    rawPlayers.push(data.me);
+    p1  = new Player(data.me.x,data.me.y,playerColors[data.me.num],data.me.level);
+    init();
+}).on('getplayers',data=>{
+    pastPlayers = rawPlayers;
     rawPlayers = data.players;
-    loaded = true;
-}).on('hostLeft',(data)=>{
-    window.location.reload();
+    cTime = data.time;
+}).on('processedKey',data=>{
+    //Server reconciliation
+    var j = 0;
+    while(j<actions.length){
+        var input = actions[j];
+        //console.log(input.id)
+        if(input.id <= data){
+            actions.splice(j,1);
+        }else{
+            j++;
+        }
+    }
+}).on('callInit',data=>{
+      myLevel = data.level;
+      p1 = new Player(data.x,data.y,playerColors[data.num],data.level);
+      init('self')
+}).on('updatePlayerNumber',()=>{
+    if(player>1){
+      player--;
+    }
+    p1.col = playerColors[player];
+}).on('changePlayer',data=>{
+      p1.x = data.x;
+      p1.y = data.y;
+      loaded = true;
+}).on('syncBalls',()=>{
+      loaded = false;
+      balls = [];
+      for(var ball of bCopy){
+        balls.push(new Ball(ball.x,ball.y,ball.i,ball.pos,ball.speed,ball.level));
+      }
+      loaded = true;
 });
 
 
 //Graphics
 const playerColors = {
-  1: "#f01111",
+  1: "#c40000",
   2: "#0095ff",
   3: "#03ad00",
   4: "#fadd00",
@@ -92,37 +102,18 @@ function resetCoins(){
 }
 
 function init(ok=null){
+  document.getElementById('Game').style.display  = "none";
   loaded = false;
   document.getElementById('currentTitleMsg').innerHTML = `${levels[myLevel].ProjectName} <br> by: ${levels[myLevel].User}`;
   data = JSON.parse(levels[myLevel].Data);
   grid = data.map;
   drawGrid();
-  for(var p of rawPlayers){
-    let col;
-    try{
-     col = playerColors[p.num];
-    }catch{
-      col = "#000000";
-    }
-    if(ok == null){
-      if(p.num == player){
-        p1 = new Player(p.x,p.y,col,p.level);
-      }
-    }else{
-      const starts = getStarts(grid);
-      let start = starts[int(random(starts.length))];
-      p1.x = start.x;
-      p1.y = start.y;
-    }
-    players.push(new Player(p.x,p.y,col,p.level))
-  }
   balls = [];
+  bCopy = [];
   coins = [];
-  if(player != 1){
-     socket.emit("getRoomBalls", "needData");    
-  }
   for(var ball of data.balls){
     balls.push(new Ball(ball.x,ball.y,ball.i,ball.pos,ball.speed,ball.level));
+    bCopy.push(new Ball(ball.x,ball.y,ball.i,ball.pos,ball.speed,ball.level))
   }
   origCoins = data.coins;
   for(var i =0; i<data.coins.length;i++){
@@ -130,6 +121,10 @@ function init(ok=null){
   }
   exitCoins = data.coins.length;
   loaded = true;
+  document.getElementById('Game').style.display  = "";
+  if(p1){
+    p1.coins = 0;
+  }
 }
 
 function setup() {
@@ -138,28 +133,48 @@ function setup() {
   //for Map
   pg = createGraphics(600, 400);
   cnv.parent("Game");
-  cnv.hide();
+  document.getElementById('Game').style.display  = "none";
   cols = (width/res);
   rows = (height/res);
   rectMode(CORNER);
 }
 
-function drawPlayers(){
-  players = [];
-  for(var p of rawPlayers){
-    let col;
-    try{
-     col = playerColors[p.num];
-    }catch{
-      col = "#000000";
+function renderPlayers(playerData){
+  playerData.forEach((data,ind)=>{
+    if(data.num != player && data.level == myLevel){
+      //This is where entity interpolation goes
+      try{
+        let before = pastPlayers[ind];
+        let after = data;
+        let time = cTime - 0.2;
+        var alpha = .5;
+       //alpha = (time - before.time) / (after.time - before.time);
+        //let alpha = .75;
+        let Ix = before.x + (after.x - before.x) * alpha;
+        let Iy = before.y + (after.y - before.y) * alpha;
+        renderHusk(Ix,Iy,playerColors[data.num]);
+      }catch{
+
+      }
+    }else{
+      p1.show();
     }
-    if(p.num<=currPlayerCount){
-      players.push(new Player(p.x,p.y,col,p.level))
-    }
-  }
+  }) 
 }
 
-function drawLevel(){
+function renderHusk(x,y,col){
+  push()
+    fill(col);
+    rect(x,y,10,10); 
+    /* hitBox */
+    if(debugMode){
+      fill("#ffffff");
+      circle(x+(10/2),y+(10/2),10);
+    }
+    pop()
+}
+
+function draw(){
   if(loaded){
     background(220);
     image(pg, 0, 0);
@@ -175,86 +190,90 @@ function drawLevel(){
         coins.splice(k,1);
       }
     }
-    for(var p of players){
-      if(p.level == myLevel){
-        p.show();
-      }
-    }
-  }
-  let myArr = [];
-  for(var ball of balls){
-    myArr.push({x:ball.x,y:ball.y,i:ball.myInd,pos:ball.pos,speed:ball.speed,level:myLevel});
-  }
-  const data = {
-    balls: myArr,
-  }
-  if(player == 1){
-    socket.emit("giveBalls",data)
+    renderPlayers(rawPlayers);
+    watchKeys();
   }
 }
 
-function handelKeys(){
-  if(pressing){
-    socket.emit('keyPressed',myKey);
-  }
-}
-
-function handelKeyBoard(){
-  if(keyIsDown(38) || keyIsDown(87) ){ //Up
-    p1.y -= playerSpeed;
-    if(p1.collidesWorld() == 1){
-      p1.y += playerSpeed;
-    }
-  }
-  if(keyIsDown(40) || keyIsDown(83)){//Down
-    p1.y += playerSpeed;
-    if(p1.collidesWorld("nextD") == 1){
-      p1.y -= playerSpeed;
-    }
-  }
-  if(keyIsDown(39) || keyIsDown(68)){//Right
-    p1.x += playerSpeed;
-    if(p1.collidesWorld("nextR") == 1){
-      p1.x -= playerSpeed;
-    }
-  }
-  if(keyIsDown(37) || keyIsDown(65)){//Left
-    p1.x -= playerSpeed;
-    if(p1.collidesWorld() == 1){
-      p1.x += playerSpeed;
-    }
-  }
-  if(p1.collidesWorld() == 3 && p1.coins >= exitCoins){
-      myLevel++;
-      myLevel = myLevel%levels.length;
-      init('self');
-  }
-  const rawP1 = {num:player,level:myLevel,x:p1.x,y:p1.y};
+function watchKeys(){
   if(loaded){
-    socket.emit('updatePlayer',rawP1);
+     if (keys[38] || keys[87]) { // up
+        handleKeys(38)
+     }
+     if (keys[40] || keys[83]) { //down
+        handleKeys(40)
+     }
+     if (keys[39] || keys[68]) { //Right
+       handleKeys(39)
+     }
+     if (keys[37] || keys[65]) { // Left
+       handleKeys(37)
+     }
   }
 }
 
-
-function keyPressed(){
-   //Parse keyPressed
-   if(isValidKey(keyCode)){
-    if(loaded){
-       myKey = {
-        num: player,
-        key: keyCode
-      }
-      pressing = true;
-    } 
-   }
-   if(keyCode == 32){
-     console.log(p1);
-   }
+function handleKeys(code){
+    movePlayerLocal(code)
+    var req = {
+          name: `Hit Key ${code}`,
+          id: actions.length,
+          key: code
+    }
+    actions.push(req);
+    var keyLog = {
+            code: code,
+            num: player,
+            req: actions.length,
+            time: cTime
+    }
+    socket.emit('keySend',keyLog)
 }
 
-function keyReleased(){
-  pressing = false;
+function movePlayerLocal(keyGiven){
+  
+    if(keyGiven == 38 || keyGiven == 87){
+        p1.y -= playerSpeed;
+        if(p1.collidesWorld() == 1){
+          p1.y += playerSpeed;
+        }
+    }
+    if(keyGiven == 40 || keyGiven == 83){
+        p1.y += playerSpeed;
+        if(p1.collidesWorld("nextD") == 1){
+            p1.y -= playerSpeed;
+        }
+    }
+     if(keyGiven == 39 || keyGiven == 68){
+         p1.x += playerSpeed;
+        if(p1.collidesWorld("nextR") == 1){
+            p1.x -= playerSpeed;
+        }
+    }
+    if(keyGiven == 37 || keyGiven == 65){
+         p1.x -= playerSpeed;
+        if(p1.collidesWorld() == 1){
+          p1.x += playerSpeed;
+        }
+    }
+  if(p1.collidesWorld() == 3 && p1.coins >= exitCoins && loaded){
+      socket.emit('levelComplete',player);
+      loaded = false;
+  }  
 }
+
+document.body.addEventListener("keydown", function (e) {
+    keys[e.keyCode] = true;
+    if(e.keyCode == 192){
+      debugMode = true;
+    }
+});
+document.body.addEventListener("keyup", function (e) {
+    keys[e.keyCode] = false;
+    if(e.keyCode == 192){
+      debugMode = false;
+    }
+});
+
 
 function CircleCircle(c1,c2){
    const d = dist(c1.x,c1.y,c2.x,c2.y);
@@ -362,6 +381,7 @@ function Ball(x,y,i,pos,speed,level){
 
 
 function Player(x,y,col,level){
+  this.commands = [];
   this.x = x;
   this.y = y;
   this.col = col;
@@ -372,10 +392,12 @@ function Player(x,y,col,level){
     const c2 = {x:c.x+(res/2),y:c.y+(res/2),r:c.r}
     const c1 = {x:this.x,y:this.y,r:this.r}
     if(CircleCircle(c1,c2)){
-      const starts = getStarts(grid);
-      let start = starts[int(random(starts.length))];
-      this.x = start.x;
-      this.y = start.y;
+      var data = {
+        level: myLevel,
+        num: player
+      }
+      socket.emit('resetPlayer',data);
+      loaded = false;
       this.coins = 0;
       resetCoins();
     }
@@ -411,24 +433,27 @@ function Player(x,y,col,level){
   }
 }
 
-
+function getsingleNeighbors(grid,i,j){
+  try{
+    const spot =  grid[i][j];
+    return spot;
+  }catch{
+    //spot dosnt exist
+    return undefined;
+  }
+}
 
 function getNeighbors(i,j){
-    let arr = [];
-    try{
-        arr.push(grid[i-1][j-1])
-        arr.push(grid[i-1][j])
-        arr.push(grid[i-1][j+1])
-        arr.push(grid[i][j-1])
-        arr.push(grid[i][j+1])
-        arr.push(grid[i+1][j-1])
-        arr.push(grid[i+1][j])
-        arr.push(grid[i+1][j+1])
-        return arr;
-    }
-    catch{
-       return [];
-    }
+  let arr = [];
+  arr.push(getsingleNeighbors(grid,i-1,j-1));
+  arr.push(getsingleNeighbors(grid,i-1,j));
+  arr.push(getsingleNeighbors(grid,i-1,j+1));
+  arr.push(getsingleNeighbors(grid,i,j-1));
+  arr.push(getsingleNeighbors(grid,i,j+1));
+  arr.push(getsingleNeighbors(grid,i+1,j-1));
+  arr.push(getsingleNeighbors(grid,i+1,j));
+  arr.push(getsingleNeighbors(grid,i+1,j+1));
+  return arr;
 }
 
 function drawGrid(){
@@ -497,6 +522,7 @@ function drawWalls(x,y,i,j){
 
 
 
+
 //Utils
 function goToPage(num){
   //Show Rooms
@@ -548,14 +574,8 @@ function joinRoom(room){
 
 
 function leaveRoom(leftPage=false){
-  loaded = false;
-  const data = {
-    num: player
-  }
-  socket.emit('leaveGame',data);
-  if(!leftPage){
     window.location.reload();
-  }
+
 }
 
 function addToQueue(me,level){
@@ -614,8 +634,8 @@ function renderRooms(rooms){
   for(var i=0;i<rooms.length;i++){
     var button = document.createElement('button');
     button.className = "levelInstance"
-    button.innerHTML = "Room #" + (i+1) + ":<br> Players: " + rooms[i].playerCount;
-    let myRoom = rooms[i];
+    button.innerHTML = "Room #" + (i+1) + ":<br> Players: " + rooms[i][1].playerCount;
+    let myRoom = rooms[i][1];
     button.onclick = function(){
       joinRoom(myRoom);
     };

@@ -29,7 +29,7 @@ button.diconnectButton{
   position: absolute;
   bottom: 0;
   left: 0;
-  visibility:hidden;
+  visibility:visible;
 }
 
 canvas {
@@ -111,3 +111,4 @@ canvas {
 #create:hover{ background-color: rgb(84, 78, 119);}
 #createR:hover{ background-color: rgb(122, 190, 65);}
 .start:hover {background-color: #0fee91;}
+.diconnectButton:hover{background-color: rgb(231, 82, 55)}

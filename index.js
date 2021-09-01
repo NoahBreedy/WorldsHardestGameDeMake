@@ -11,7 +11,8 @@ const serv = require('http').Server(app);
 const socket = require('socket.io');
 const io = socket(serv);
 const Max_Rooms = 10,ID_LENGTH=5,res=25,playerSpeed = 1.25,dict="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-let AllLevels,Rooms=[];
+let AllLevels,Rooms= new Map();
+let t = 0;
 
 //A pool connection may not be needed here but whatever I dont care
 const con = mysql.createPool({
@@ -20,33 +21,6 @@ const con = mysql.createPool({
     password: process.env.DB_PASS,
     database:process.env.DB_USER
 });
-
-
-
-
-//sendDataToGameRooms  run at 22/33/70
-setInterval(updatePlayers,40);
-function updatePlayers(){
-  for(var i=0;i<Rooms.length;i++){
-    const data = {
-      players: Rooms[i].players,
-      playerCount: Rooms[i].playerCount
-    }
-    io.to(Rooms[i].id).emit('updatePlayers',data);
-  }
-}
-//update the list of rooms
-setInterval(()=>{
-  io.sockets.in("main").emit('returnRooms', Rooms);
-},1500);
-//Clear Dead ROOMS
-setInterval(()=>{
-  for(var i =0;i<Rooms.length;i++){
-    if(Rooms[i].playerCount == 0){
-      Rooms.splice(i,1);
-    }
-  }
-},5500);
 
 function createId(len){
   let id = "";
@@ -64,12 +38,12 @@ function getRandomInt(min, max) {
 
 
 function Room(password,levels){
-  this.players = [];
-  this.playerCount = 1;
+  this.playerCount = 0;
   this.password = password;
-  this.balls = [];
   this.levels = levels;
   this.id = createId(ID_LENGTH);
+  this.balls = [];
+  this.players = [];
 }
 
 
@@ -83,95 +57,143 @@ app.get('/',(req, res) => {
   });
 });
 
+//send updated rooms list
+setInterval(()=>{ 
+  io.sockets.in("roomWindow").emit('returnRooms', [...Rooms]);
+}, 2000);
+//Clean Dead Rooms
+setInterval(()=>{ 
+  arrayTmp = Array.from(Rooms);
+  for(var i =0; i<arrayTmp.length;i++){
+    if(arrayTmp[i][1].playerCount<1){
+      arrayTmp.splice(i,1);
+      break;
+    }
+  }
+  Rooms = new Map(arrayTmp)
+}, 2000);
+
+const serverRate = 30;
+//send rawplayer data
+setInterval(()=>{ 
+  Rooms.forEach(room=>{
+    io.sockets.in(room.id).emit('getplayers', {players:room.players,time:t});
+  })
+}, (1000/serverRate));
+
 
 io.sockets.on('connection', function(socket) {
   //console.log("New Person: " + socket.id);
   socket.on('getLevels', (data) => {
     io.to(socket.id).emit('returnLevels',AllLevels);
   }).on('newRoom',(data)=>{
-      if(Rooms.length<Max_Rooms){
-      Rooms.push(new Room(data.password,data.levels));
-      const p = createNewPlayer(Rooms.length-1,0,1);
-      Rooms[Rooms.length-1].players.push(p);
-      socket.join(Rooms[Rooms.length-1].id);
-      io.to(socket.id).emit('joinedRoom',Rooms[Rooms.length-1]);
-      }else{
-        io.to(socket.id).emit('msg',"TOO MANY ROOMS SORRY!");
+      if(Rooms.size<Max_Rooms){
+      let newRoom = new Room(data.password,data.levels);
+      socket.join(newRoom.id);
+      socket.leave("roomWindow")
+      Rooms.set(newRoom.id,newRoom);
+      newRoom.playerCount++;
+      let player = createNewPlayer(newRoom.id,0,newRoom.playerCount,socket.id);
+      newRoom.players.push(player);
+      let return_data = {
+        roomId: newRoom.id,
+        me: player,
+        levels: newRoom.levels
       }
-  }).on('getRoomBalls',(data)=>{
-     roomName = getRoomId(socket.rooms);
-     for(var i=0;i<Rooms.length;i++){
-       if(Rooms[i].id == roomName){
-         io.to(socket.id).emit('updateBalls',data);
-         break;
-       }
+      Rooms.set(newRoom.id,newRoom);
+      io.to(socket.id).emit('returnStartData',return_data);
+      }else{
+        io.to(socket.id).emit('altmsg',"Too Many Rooms (please try again later)");
+      }
+  }).on('getRooms',()=>{
+      if(Rooms.size > 0){
+        socket.join("roomWindow");
+        io.to(socket.id).emit('returnRooms',[...Rooms]);
+      }else{
+        io.to(socket.id).emit('altmsg',"There Are No Rooms (try creating one)")
+      }
+  }).on('joinRoom',data=>{
+      let room = Rooms.get(data.id);
+      room.playerCount++;
+      let player = createNewPlayer(data.id,0,room.playerCount,socket.id);
+      room.players.push(player);
+      let return_data = {
+            roomId: data.id,
+            me: player,
+            levels: room.levels,
+      }
+      socket.leave("roomWindow");
+      socket.join(data.id);
+      Rooms.set(data.id,room);
+      io.to(socket.id).emit('returnStartData',return_data);
+      io.in(data.id).emit('syncBalls');
+  }).on('keySend',key=>{
+    let id = fs_GetRoomId(socket.rooms);
+    let room = Rooms.get(id);
+    try{
+      let player  = room.players[key.num-1];
+      player = updatePlayer(player,key.code,id,key.req);
+      player.time = key.time;
+      room.players[key.num-1] = player;
+      Rooms.set(id,room);
+      io.to(socket.id).emit('processedKey',key.req);
+    }catch{
+
+    }
+  }).on('disconnecting',()=>{
+     try{
+      let id = fs_GetRoomId(socket.rooms);
+      let room = Rooms.get(id);
+      for(var i =0; i<room.players.length;i++){
+          if(room.players[i].socketId == socket.id){
+            room.playerCount--;
+            room.players.splice(i,1);
+            break;
+          }
+      }
+      for(var i=0;i<room.players.length;i++){
+        if(room.players[i].num > 1){
+          room.players[i].num--;
+        }
+      }
+      io.in(id).emit('updatePlayerNumber');
+      io.in(id).emit('syncBalls');
+     }catch{
+
      }
      
-  }).on('giveBalls',(data)=>{
-      roomName = getRoomId(socket.rooms);
-      for(var i=0;i<Rooms.length;i++){
-       if(Rooms[i].id == roomName){
-         Rooms[i].balls = data.balls;
-         break;
-       }
-     }
-  }).on('getRooms',(data)=>{
-    io.to(socket.id).emit('returnRooms',Rooms);
-    if(Rooms.length>0){
-      socket.join("main");
-    }
-  }).on('joinRoom',(data)=>{
-     socket.leave("main");
-     socket.join(data.id);
-     for(var i=0;i<Rooms.length;i++){
-       if(Rooms[i].id == data.id){
-         const myNum = Rooms[i].players.length+1;
-         const p = createNewPlayer(i,0,myNum)
-         Rooms[i].players.push(p);
-         Rooms[i].playerCount++;
-         io.to(Rooms[i].id).emit('joinedRoom',Rooms[i]);
-       }
-     }
-  }).on('updatePlayer',(data)=>{
-      const currRoomID = getRoomId(socket.rooms);
-      const Rind = getRoomIndexByID(currRoomID);
-      const Pind = data.num-1;
-      Rooms[Rind].players[Pind] = data;
-  }).on('reachedEnd',(data)=>{
-      const currRoomID = getRoomId(socket.rooms);
-      const Rind = getRoomIndexByID(currRoomID);
-      const Pind = data.num-1;
-      Rooms[Rind].players[Pind] = createNewPlayer(Rind,data.level-1,data);
-      io.to(socket.id).emit('activateInit',null);
-  }).on('leaveGame',(data)=>{
-    // VERY WEIRD AND BUGGY!!! working on it 
-    const currRoomID = getRoomId(socket.rooms);
-    const Rind = getRoomIndexByID(currRoomID);
-    const Pind = data.num-1;
-    Rooms[Rind].players.splice(Pind,1);
-    Rooms[Rind].playerCount =  Rooms[Rind].playerCount - 1;
-    const playerData = {
-      players: Rooms[Rind].players,
-      whoLeft: data.num,
-      playerCount:Rooms[Rind].playerCount
-
-    }
-    socket.leave(currRoomID);
-    io.to(currRoomID).emit('playerLeftRoom',playerData);
-  });
-  
+  }).on('levelComplete',player_num=>{
+        let id = fs_GetRoomId(socket.rooms);
+        let room = Rooms.get(id);
+        let player  = room.players[player_num-1];
+        player.level++;
+        player.level = player.level%room.levels.length;
+        const grid = JSON.parse(Rooms.get(id).levels[player.level].Data).map
+        const starts = getStarts(grid);
+        let start = starts[parseInt(getRandomInt(0,starts.length))];
+        player.x = start.x;
+        player.y = start.y;
+        room.players[player_num-1] = player;
+        io.to(socket.id).emit('callInit',player);
+        io.in(id).emit('syncBalls');
+  }).on('resetPlayer',data=>{
+    let id = fs_GetRoomId(socket.rooms);
+    let room = Rooms.get(id);
+    let player  = room.players[data.num-1];
+    const grid = JSON.parse(Rooms.get(id).levels[data.level].Data).map
+    const starts = getStarts(grid);
+    let start = starts[parseInt(getRandomInt(0,starts.length))];
+    player.x = start.x;
+    player.y = start.y;
+    room.players[data.num-1] = player;
+    io.to(socket.id).emit('changePlayer',player);
+    //io.in(id).emit('syncBalls');
+  })
 });
 
-function getRoomId(rooms){
-  for(var item of rooms){
-       if(item.length == ID_LENGTH){
-         return item;
-       }
-    }
-}
 
 function collidesWorld(id,player,call=null){
-    const grid = JSON.parse(Rooms[id].levels[player.level].Data).map
+    const grid = JSON.parse(Rooms.get(id).levels[player.level].Data).map
     const x = parseInt(player.x/res);
     const y = parseInt(player.y/res);
     if(call == "nextR"){
@@ -185,21 +207,52 @@ function collidesWorld(id,player,call=null){
     return grid[x][y];
 }
 
-function getRoomIndexByID(id){
-  for(var i=0;i<Rooms.length;i++){
-    if(Rooms[i].id = id){
-      return i
+function updatePlayer(p,key,id,action){
+  try{
+      if(key == 38 || key == 87){ //Up key
+    p.y -= playerSpeed;
+    if(collidesWorld(id,p) == 1){
+      p.y += playerSpeed;
     }
   }
+
+  if( key == 40 || key  == 83){ //Down key
+    p.y += playerSpeed;
+    if(collidesWorld(id,p,"nextD") == 1){
+      p.y -= playerSpeed;
+    }
+  }
+
+  if(key == 39 || key == 68){ //Right key
+    p.x += playerSpeed;
+    if(collidesWorld(id,p,"nextR") == 1){
+      p.x -= playerSpeed;
+    }
+  }
+
+  if(key == 37 || key == 65){ //Left key
+    p.x -= playerSpeed;
+    if(collidesWorld(id,p) == 1){
+      p.x += playerSpeed;
+    }
+  }
+
+  p.action = action;
+  }catch{
+  }
+  
+  return p
 }
 
-function createNewPlayer(id,level,num){
-   const grid = JSON.parse(Rooms[id].levels[level].Data).map
+function fs_GetRoomId(rooms){
+  return [...rooms.values()].filter(room => room.length == ID_LENGTH)[0];
+}
+
+function createNewPlayer(id,level,num,soc){
+   const grid = JSON.parse(Rooms.get(id).levels[level].Data).map
    const starts = getStarts(grid);
    let start = starts[parseInt(getRandomInt(0,starts.length))];
-   return {num:num,level:level,x:start.x,y:start.y}
-   
-  
+   return {num:num,level:level,x:start.x,y:start.y,action:0,time:0,socketId:soc}
 }
 
 function getStarts(grid){
