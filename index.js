@@ -1,12 +1,12 @@
 /*
-  TODO: Add Client-Side Prediction with Server-Side Reconcilliation
-  TODO: Add Entity Interpolation
+  TODO: Add Client-Side Prediction with Server-Side Reconcilliation [DONE]
+  TODO: Add Entity Interpolation [DONE]
 */
 
 require('dotenv').config();
 const express = require('express');
 const app = express();
-const mysql = require('mysql');
+const { Client } = require('pg');
 const serv = require('http').Server(app);
 const socket = require('socket.io');
 const io = socket(serv);
@@ -14,13 +14,10 @@ const Max_Rooms = 10,ID_LENGTH=5,res=25,playerSpeed = 1.25,dict="abcdefghijklmno
 let AllLevels,Rooms= new Map();
 let t = 0;
 
-//A pool connection may not be needed here but whatever I dont care
-const con = mysql.createPool({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASS,
-    database:process.env.DB_USER
+const con = new Client({
+    connectionString: process.env.cString
 });
+con.connect();
 
 function createId(len){
   let id = "";
@@ -51,8 +48,8 @@ app.use('/client',express.static(__dirname + '/client'));
 
 
 app.get('/',(req, res) => {
-  con.query(`SELECT * FROM WorldsHardestGame`,(err,result)=>{
-       AllLevels = result;
+  con.query('SELECT * FROM "Blungus23/worldshardestgame"."levels";',(err,result)=>{
+       AllLevels = result.rows;
        res.sendFile(__dirname + '/client/index.html');
   });
 });
@@ -187,7 +184,7 @@ io.sockets.on('connection', function(socket) {
     player.y = start.y;
     room.players[data.num-1] = player;
     io.to(socket.id).emit('changePlayer',player);
-    //io.in(id).emit('syncBalls');
+    io.in(id).emit('syncBalls');
   })
 });
 

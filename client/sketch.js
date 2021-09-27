@@ -1,5 +1,5 @@
 const socket = io();
-const Max_Levels = 5,Max_Players = 5,playerSpeed=1.25,res = 25;;
+const Max_Levels = 10,Max_Players = 5,playerSpeed=1.25,res = 25;;
 let AllLevels,AllRooms,HOSTLEVEL,myQueue=[];
 
 
@@ -14,9 +14,12 @@ let loaded = false;
 let pressing = false;
 let debugMode = false;
 let myLevel = 0;
-let exitCoins =0;
+let exitCoins = 0;
 let player = 0;
 let currPlayerCount = 0;
+let totalDeaths = 0;
+let prestiges = 0;
+let deaths = 0;
 let levels;
 let data;
 let grid;
@@ -64,6 +67,10 @@ socket.on('returnLevels',data=>{
     }
 }).on('callInit',data=>{
       myLevel = data.level;
+      if(myLevel == 0){
+        prestiges++;
+        deaths = 0;
+      }
       p1 = new Player(data.x,data.y,playerColors[data.num],data.level);
       init('self')
 }).on('updatePlayerNumber',()=>{
@@ -99,6 +106,14 @@ function resetCoins(){
   for(var i =0; i<origCoins.length;i++){
     coins.push(new Coin(origCoins[i].x,origCoins[i].y));
   }
+  deaths++;
+  totalDeaths++;
+
+  if(window.innerWidth>900){
+    document.getElementById('stats').innerHTML = `Total Deaths: ${totalDeaths} <br> Current Level Deaths: ${deaths} <br> Course Completions: ${prestiges}`;
+  }else{
+    document.getElementById('stats').innerHTML = "";
+  }
 }
 
 function init(ok=null){
@@ -122,9 +137,16 @@ function init(ok=null){
   exitCoins = data.coins.length;
   loaded = true;
   document.getElementById('Game').style.display  = "";
+  document.getElementById('statsContainer').style.display  = "";
   if(p1){
     p1.coins = 0;
   }
+  if(window.innerWidth>900){
+    document.getElementById('stats').innerHTML = `Total Deaths: ${totalDeaths} <br> Current Level Deaths: ${deaths} <br> Course Completions: ${prestiges}`;
+  }else{
+    document.getElementById('stats').innerHTML = "";
+  }
+  
 }
 
 function setup() {
@@ -134,6 +156,7 @@ function setup() {
   pg = createGraphics(600, 400);
   cnv.parent("Game");
   document.getElementById('Game').style.display  = "none";
+  document.getElementById('statsContainer').style.display  = "none";
   cols = (width/res);
   rows = (height/res);
   rectMode(CORNER);
@@ -148,7 +171,7 @@ function renderPlayers(playerData){
         let after = data;
         let time = cTime - 0.2;
         var alpha = .5;
-       //alpha = (time - before.time) / (after.time - before.time);
+        //alpha = (time - before.time) / (after.time - before.time);
         //let alpha = .75;
         let Ix = before.x + (after.x - before.x) * alpha;
         let Iy = before.y + (after.y - before.y) * alpha;
@@ -176,7 +199,6 @@ function renderHusk(x,y,col){
 
 function draw(){
   if(loaded){
-    background(220);
     image(pg, 0, 0);
     for(var ball of balls){
        ball.show();
@@ -264,14 +286,14 @@ function movePlayerLocal(keyGiven){
 document.body.addEventListener("keydown", function (e) {
     keys[e.keyCode] = true;
     if(e.keyCode == 192){
-      debugMode = true;
+      debugMode = !debugMode;
+      x = window.innerWidth,
+      y = window.innerHeight;
+      console.log(x + ' × ' + y);
     }
 });
 document.body.addEventListener("keyup", function (e) {
     keys[e.keyCode] = false;
-    if(e.keyCode == 192){
-      debugMode = false;
-    }
 });
 
 
@@ -455,7 +477,7 @@ function getNeighbors(i,j){
   arr.push(getsingleNeighbors(grid,i+1,j+1));
   return arr;
 }
-
+//Draws the map to different graphics texture
 function drawGrid(){
   for(var i =0; i<cols;i++){
     for(var j =0;j<rows;j++){
@@ -485,7 +507,7 @@ function drawGrid(){
     }
   }
 }
-//Renders the black lines or box edges
+//Renders the black lines i.e. box edges
 function drawWalls(x,y,i,j){
         pg.stroke(0)
         const neigh = getNeighbors(i,j);
@@ -600,8 +622,8 @@ function addToQueue(me,level){
     document.getElementById("currentTitleMsg").innerHTML= `Click on a button to Add to your Queue <br> Then click Create Room <br> current queue length: ${myQueue.length}`;  
 }
 
+//finds if level is already in queue
 function isValid(find){
-  //finds if level is already in queue
   for(var i=0;i<myQueue.length;i++){
         if(myQueue[i].Id == find){
           return false
@@ -658,24 +680,7 @@ function clearRooms(){
 }
 
 
-function getStarts(grid){
-  let starts = [];
-  for(var i =0;i<grid[0].length;i++){
-    for(var j =0;j<grid.length;j++){
-      if(grid[i][j] == 2){
-        starts.push({x:i*res,y:j*res});
-      }
-    }
-  }
-  return starts;
-}
 
 
-function getMyPlayer(p){
-    for(var i=0;i<p.length;i++){
-      if(p[i].num == player){
-        return p[i];
-      }
-    }
-}
+
 
